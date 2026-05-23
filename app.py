@@ -4,6 +4,7 @@ from datetime import date
 from typing import Any
 
 import streamlit as st
+
 try:
     from streamlit_autorefresh import st_autorefresh
 except Exception:
@@ -26,6 +27,8 @@ STATIONS = [
     "오송",
     "대전",
     "서대전",
+    "계룡",
+    "논산",
     "익산",
     "정읍",
     "광주송정",
@@ -57,7 +60,7 @@ SEAT_MODES = ["일반실 우선", "일반실만", "특실 우선", "특실만"]
 def require_pin() -> bool:
     app_pin = str(st.secrets.get("APP_PIN", "")).strip()
     if not app_pin:
-        st.error("Streamlit Secrets에 APP_PIN을 먼저 설정하세요.")
+        st.error("Streamlit Secrets에 APP_PIN을 먼저 설정해 주세요.")
         return False
 
     with st.form("pin_form"):
@@ -68,7 +71,7 @@ def require_pin() -> bool:
         st.session_state["authed"] = True
 
     if not st.session_state.get("authed"):
-        st.info("개인 예약 정보 보호를 위해 PIN이 필요합니다.")
+        st.info("개인 예약 정보를 보호하기 위해 PIN이 필요합니다.")
         return False
     return True
 
@@ -86,6 +89,11 @@ def make_job() -> dict[str, Any] | None:
             seat_mode = st.selectbox("좌석", SEAT_MODES)
 
         train_no = st.text_input("특정 열차 번호", placeholder="비우면 전체 조회")
+        reserve_enabled = st.checkbox(
+            "좌석 발견 시 예약 시도",
+            value=False,
+            help="체크하면 조건에 맞는 좌석이 발견될 때 결제 전 예약까지만 시도합니다.",
+        )
         poll_interval = st.number_input(
             "재조회 간격(초)",
             min_value=15,
@@ -110,6 +118,7 @@ def make_job() -> dict[str, Any] | None:
         "adults": int(adults),
         "seat_mode": seat_mode,
         "train_no": train_no.strip() or "전체",
+        "reserve_enabled": bool(reserve_enabled),
         "poll_interval": int(poll_interval),
     }
 
@@ -134,7 +143,7 @@ def render_status() -> None:
         if worker_is_alive():
             st.caption("작업 루프: 실행 중")
         else:
-            st.caption("작업 루프: 대기 중 또는 재시작 필요")
+            st.caption("작업 루프: 다음 새로고침에서 재시작됩니다")
 
     job = state.get("job")
     if isinstance(job, dict):
