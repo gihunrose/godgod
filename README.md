@@ -45,8 +45,15 @@ TELEGRAM_CHAT_ID = ""
 
 - 조건 저장
 - 시작/중지 상태 저장
+- 백그라운드 작업 루프
+- 5초 자동 새로고침
 - 로그 표시
 - PIN 보호
 
 실제 예약 엔진은 `reservation_engine.py`의 `ReservationEngine.run_once()` 뒤에 붙입니다.
 코레일 anti-bot 차단을 우회하는 로직은 포함하지 않습니다.
+
+## 업데이트 후 재배포
+
+GitHub에 파일을 새로 올리면 Streamlit Cloud가 자동으로 재배포합니다.
+`requirements.txt`에 `streamlit-autorefresh`가 추가되어 첫 재배포 때 의존성을 다시 설치합니다.

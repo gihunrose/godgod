@@ -4,9 +4,14 @@ from datetime import date
 from typing import Any
 
 import streamlit as st
+try:
+    from streamlit_autorefresh import st_autorefresh
+except Exception:
+    st_autorefresh = None
 
 from reservation_engine import ReservationEngine
 from state_store import append_log, load_state, save_state, start_job, stop_job
+from worker import ensure_worker_started, worker_is_alive
 
 
 STATIONS = [
@@ -81,6 +86,13 @@ def make_job() -> dict[str, Any] | None:
             seat_mode = st.selectbox("좌석", SEAT_MODES)
 
         train_no = st.text_input("특정 열차 번호", placeholder="비우면 전체 조회")
+        poll_interval = st.number_input(
+            "재조회 간격(초)",
+            min_value=15,
+            max_value=300,
+            value=30,
+            step=5,
+        )
         submitted = st.form_submit_button("조건 저장")
 
     if not submitted:
@@ -98,6 +110,7 @@ def make_job() -> dict[str, Any] | None:
         "adults": int(adults),
         "seat_mode": seat_mode,
         "train_no": train_no.strip() or "전체",
+        "poll_interval": int(poll_interval),
     }
 
 
@@ -116,6 +129,12 @@ def render_status() -> None:
         st.error("오류")
     else:
         st.info("대기 중")
+
+    if status == "running":
+        if worker_is_alive():
+            st.caption("작업 루프: 실행 중")
+        else:
+            st.caption("작업 루프: 대기 중 또는 재시작 필요")
 
     job = state.get("job")
     if isinstance(job, dict):
@@ -136,6 +155,13 @@ def main() -> None:
     if not require_pin():
         return
 
+    if st_autorefresh is not None:
+        st_autorefresh(interval=5_000, key="ktxgo_status_refresh")
+
+    state = load_state()
+    if state.get("status") == "running" and not worker_is_alive():
+        ensure_worker_started()
+
     job = make_job()
     if job:
         state = load_state()
@@ -153,6 +179,7 @@ def main() -> None:
                 st.error("먼저 조건을 저장하세요.")
             else:
                 start_job(job)
+                ensure_worker_started()
                 st.rerun()
 
     with col2:
