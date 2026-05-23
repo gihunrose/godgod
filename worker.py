@@ -30,6 +30,7 @@ def ensure_worker_started() -> bool:
 def _worker_main() -> None:
     append_log("백그라운드 작업 루프가 켜졌습니다.")
     engine = ReservationEngine()
+    consecutive_transient_errors = 0
 
     while True:
         state = load_state()
@@ -60,6 +61,20 @@ def _worker_main() -> None:
             save_state(state)
             append_log(f"반복을 중지합니다. {result.message}")
             return
+
+        if result.transient:
+            consecutive_transient_errors += 1
+            if consecutive_transient_errors >= 3:
+                state = load_state()
+                state["status"] = "error"
+                save_state(state)
+                append_log(
+                    "일시적 접속 오류가 3회 연속 발생해 중지합니다. "
+                    "잠시 뒤 1회 테스트부터 다시 확인하세요."
+                )
+                return
+        else:
+            consecutive_transient_errors = 0
 
         append_log(f"아직 성공하지 못했습니다. {result.message}")
         time.sleep(int(job.get("poll_interval", 30)))

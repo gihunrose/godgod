@@ -14,6 +14,7 @@ class EngineResult:
     message: str
     reservation_no: str = ""
     fatal: bool = False
+    transient: bool = False
 
 
 def _seat_candidates(seat_mode: str) -> list[str]:
@@ -57,6 +58,17 @@ def _blocked_message(exc: KorailClientError) -> str:
     return ""
 
 
+def _int_secret(name: str, default: int, min_value: int, max_value: int) -> int:
+    value = get_secret(name, "")
+    if not value:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return max(min_value, min(parsed, max_value))
+
+
 class ReservationEngine:
     """Login, search, and optionally reserve without payment automation."""
 
@@ -79,8 +91,9 @@ class ReservationEngine:
         train_no = str(job.get("train_no", "전체"))
         reserve_enabled = bool(job.get("reserve_enabled", False))
 
+        timeout_seconds = _int_secret("KORAIL_TIMEOUT_SECONDS", 25, 5, 60)
         append_log(f"코레일 로그인 시도: {member_id[:3]}***")
-        client = KorailSearchClient(member_id, password)
+        client = KorailSearchClient(member_id, password, timeout_seconds=timeout_seconds)
 
         try:
             client.login()
@@ -94,6 +107,7 @@ class ReservationEngine:
                 False,
                 f"코레일 요청 실패 [{exc.code}]: {exc}",
                 fatal=bool(blocked),
+                transient=exc.code.upper() in {"TIMEOUT", "NETWORK"},
             )
 
         append_log(
@@ -137,6 +151,7 @@ class ReservationEngine:
                 False,
                 f"예약 요청 실패 [{exc.code}]: {exc}",
                 fatal=bool(blocked),
+                transient=exc.code.upper() in {"TIMEOUT", "NETWORK"},
             )
 
         reservation_no = str(reserve_result.get("h_pnr_no", ""))

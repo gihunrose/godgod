@@ -87,9 +87,10 @@ class KorailSearchClient:
     SCHEDULE_URL = "https://smart.letskorail.com/classes/com.korail.mobile.seatMovie.ScheduleView"
     RESERVE_URL = "https://smart.letskorail.com/classes/com.korail.mobile.certification.TicketReservation"
 
-    def __init__(self, member_id: str, password: str) -> None:
+    def __init__(self, member_id: str, password: str, timeout_seconds: int = 25) -> None:
         self.member_id = member_id.strip()
         self.password = password.strip()
+        self.timeout_seconds = max(5, min(int(timeout_seconds), 60))
         self.session = requests.Session()
         self.session.verify = False
         self.session.headers.update(
@@ -107,7 +108,7 @@ class KorailSearchClient:
 
     def _post_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         try:
-            response = self.session.post(url, data=params, timeout=12)
+            response = self.session.post(url, data=params, timeout=self.timeout_seconds)
             response.raise_for_status()
             payload = response.json()
         except requests.exceptions.Timeout as exc:
