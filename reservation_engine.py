@@ -13,6 +13,7 @@ class EngineResult:
     ok: bool
     message: str
     reservation_no: str = ""
+    fatal: bool = False
 
 
 def _seat_candidates(seat_mode: str) -> list[str]:
@@ -66,6 +67,7 @@ class ReservationEngine:
             return EngineResult(
                 ok=False,
                 message="Streamlit Secrets에 KTX_ID와 KTX_PASSWORD를 설정해야 합니다.",
+                fatal=True,
             )
 
         dep = str(job["dep"])
@@ -88,7 +90,11 @@ class ReservationEngine:
             blocked = _blocked_message(exc)
             if blocked:
                 append_log(blocked)
-            return EngineResult(False, f"코레일 요청 실패 [{exc.code}]: {exc}")
+            return EngineResult(
+                False,
+                f"코레일 요청 실패 [{exc.code}]: {exc}",
+                fatal=bool(blocked),
+            )
 
         append_log(
             f"조건 확인: {dep}->{arr} {ride_date} {hour}시 이후, "
@@ -127,7 +133,11 @@ class ReservationEngine:
             blocked = _blocked_message(exc)
             if blocked:
                 append_log(blocked)
-            return EngineResult(False, f"예약 요청 실패 [{exc.code}]: {exc}")
+            return EngineResult(
+                False,
+                f"예약 요청 실패 [{exc.code}]: {exc}",
+                fatal=bool(blocked),
+            )
 
         reservation_no = str(reserve_result.get("h_pnr_no", ""))
         append_log(

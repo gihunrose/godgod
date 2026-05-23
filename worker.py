@@ -54,5 +54,12 @@ def _worker_main() -> None:
             append_log(result.message)
             return
 
+        if result.fatal:
+            state = load_state()
+            state["status"] = "error"
+            save_state(state)
+            append_log(f"반복을 중지합니다. {result.message}")
+            return
+
         append_log(f"아직 성공하지 못했습니다. {result.message}")
         time.sleep(int(job.get("poll_interval", 30)))
