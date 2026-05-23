@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from browser_engine_client import BrowserEngineClient, BrowserEngineClientError
 from korail_search_client import KorailClientError, KorailSearchClient, Train
 from server_config import get_secret
 from state_store import append_log
@@ -70,6 +71,55 @@ def _int_secret(name: str, default: int, min_value: int, max_value: int) -> int:
 
 
 class ReservationEngine:
+    def run_once(self, job: dict[str, Any]) -> EngineResult:
+        mode = get_secret("ENGINE_MODE", "browser").lower()
+        if mode in {"browser", "browser_server", "remote_browser"}:
+            return BrowserServerReservationEngine().run_once(job)
+        if mode in {"api", "direct_api", "korail_api"}:
+            return DirectApiReservationEngine().run_once(job)
+        return EngineResult(
+            ok=False,
+            message=f"알 수 없는 ENGINE_MODE입니다: {mode}",
+            fatal=True,
+        )
+
+
+class BrowserServerReservationEngine:
+    def run_once(self, job: dict[str, Any]) -> EngineResult:
+        base_url = get_secret("BROWSER_ENGINE_URL")
+        token = get_secret("BROWSER_ENGINE_TOKEN")
+        if not base_url or not token:
+            return EngineResult(
+                ok=False,
+                message=(
+                    "브라우저 엔진이 아직 연결되지 않았습니다. "
+                    "Streamlit Secrets에 BROWSER_ENGINE_URL과 BROWSER_ENGINE_TOKEN을 설정하세요."
+                ),
+                fatal=True,
+            )
+
+        timeout_seconds = _int_secret("BROWSER_ENGINE_TIMEOUT_SECONDS", 45, 5, 120)
+        append_log("브라우저 엔진에 작업을 전달합니다.")
+        client = BrowserEngineClient(base_url, token, timeout_seconds)
+        try:
+            result = client.run_once(job)
+        except BrowserEngineClientError as exc:
+            return EngineResult(
+                ok=False,
+                message=str(exc),
+                transient=exc.transient,
+            )
+
+        return EngineResult(
+            ok=result.ok,
+            message=result.message,
+            reservation_no=result.reservation_no,
+            fatal=result.fatal,
+            transient=result.transient,
+        )
+
+
+class DirectApiReservationEngine:
     """Login, search, and optionally reserve without payment automation."""
 
     def run_once(self, job: dict[str, Any]) -> EngineResult:
